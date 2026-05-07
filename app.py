@@ -11,7 +11,7 @@ from datetime import datetime
 # ==========================================
 st.set_page_config(
     page_title="Nelumbo",
-    page_icon="🪷",
+    page_icon="logo.png",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -36,6 +36,10 @@ h1,h2,h3,h4,h5,h6,p,label,div {
     color: white !important;
 }
 
+[data-testid="stSidebar"] {
+    background-color: #161a24;
+}
+
 [data-testid="stFileUploader"] {
     border: 2px dashed #7c4dff;
     border-radius: 15px;
@@ -48,8 +52,8 @@ h1,h2,h3,h4,h5,h6,p,label,div {
     color: white;
     border-radius: 12px;
     border: none;
-    padding: 12px 20px;
-    font-size: 16px;
+    padding: 14px 20px;
+    font-size: 18px;
     font-weight: bold;
     width: 100%;
 }
@@ -66,16 +70,12 @@ h1,h2,h3,h4,h5,h6,p,label,div {
     padding-bottom:10px;
 }
 
-.logo {
-    text-align:center;
-    font-size:80px;
-}
-
 .title {
     text-align:center;
     font-size:42px;
     font-weight:bold;
     margin-bottom:0;
+    color:white;
 }
 
 .subtitle {
@@ -86,12 +86,15 @@ h1,h2,h3,h4,h5,h6,p,label,div {
     font-size:18px;
 }
 
+img {
+    margin-bottom: 10px;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
-
 # ==========================================
-# HEADER
+# HEADER WITH CUSTOM PNG LOGO
 # ==========================================
 col1, col2, col3 = st.columns([1,2,1])
 
@@ -99,7 +102,7 @@ with col2:
 
     st.image(
         "logo.png.png",
-        width=180
+        width=220
     )
 
     st.markdown("""
@@ -112,6 +115,8 @@ with col2:
 # ==========================================
 # SIDEBAR
 # ==========================================
+st.sidebar.image("logo.png", width=100)
+
 st.sidebar.title("Nelumbo Dashboard")
 
 form_type = st.sidebar.selectbox(
@@ -131,11 +136,11 @@ st.sidebar.info("Upload IASR / PCT PDF and Word Template")
 # COUNTRY MAP
 # ==========================================
 COUNTRY_MAP = {
-    "CN": "People's Republic of China",
+    "CN": "China",
     "IN": "India",
-    "US": "USA",
+    "US": "United States",
     "JP": "Japan",
-    "KR": "Republic of Korea",
+    "KR": "South Korea",
     "EP": "European Patent Office",
     "GB": "United Kingdom"
 }
