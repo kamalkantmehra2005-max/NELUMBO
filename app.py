@@ -11,7 +11,7 @@ from datetime import datetime
 # ==========================================
 st.set_page_config(
     page_title="Nelumbo",
-    page_icon="logo.png",
+    page_icon="🌸",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -94,19 +94,17 @@ img {
 """, unsafe_allow_html=True)
 
 # ==========================================
-# HEADER WITH CUSTOM PNG LOGO
+# HEADER WITH SAFE LOGO
 # ==========================================
 col1, col2, col3 = st.columns([1,2,1])
 
 with col2:
 
-   try:
-    st.image(
-        "logo.png",
-        width=220
-    )
-except:
-    st.warning("Logo not found")
+    try:
+        st.image("logo.png", width=220)
+
+    except:
+        st.warning("Logo not found")
 
     st.markdown("""
     <div class="title">Nelumbo</div>
@@ -120,6 +118,7 @@ except:
 # ==========================================
 try:
     st.sidebar.image("logo.png", width=100)
+
 except:
     st.sidebar.warning("Logo not found")
 
@@ -222,7 +221,7 @@ def split_address(addr):
     return result
 
 # ==========================================
-# SAFE STYLE PRESERVE REPLACER
+# STYLE PRESERVE REPLACER
 # ==========================================
 def replace_text_preserve_style(paragraph, key, value):
 
@@ -261,9 +260,7 @@ def extract_data(pdf_file):
 
         return m.group(1).strip() if m else ""
 
-    # ======================================
     # TODAY DATE
-    # ======================================
     today = datetime.today()
 
     day = today.strftime("%d")
@@ -285,9 +282,7 @@ def extract_data(pdf_file):
 
     data["today_date_short"] = today.strftime("%B %d, %Y")
 
-    # ======================================
     # BASIC DETAILS
-    # ======================================
     data["application_no"] = find(r'Application Number:\s*(PCT/\S+)')
 
     date_match = re.search(
@@ -299,9 +294,7 @@ def extract_data(pdf_file):
 
     data["title"] = find(r'Title \(EN\):\s*(.*?)\s\(')
 
-    # ======================================
     # ABSTRACT
-    # ======================================
     abstract_match = re.search(
         r'Abstract:\s*\(EN\):(.*?)(?:\([A-Z]{2}\):|Claims|Description)',
         text,
@@ -310,9 +303,7 @@ def extract_data(pdf_file):
 
     data["abstract"] = abstract_match.group(1).strip() if abstract_match else ""
 
-    # ======================================
     # APPLICANT
-    # ======================================
     applicant_match = re.search(
         r'Applicant\(s\):(.*?)\[',
         text
@@ -339,9 +330,7 @@ def extract_data(pdf_file):
             data["app_country"] = split_addr["country"]
             data["app_pin"] = split_addr["pin"]
 
-    # ======================================
     # INVENTORS
-    # ======================================
     inventors = re.findall(
         r'([A-Z][^;]+);(.*?\([A-Z]{2}\))',
         text
@@ -367,9 +356,7 @@ def extract_data(pdf_file):
             "pin": split_addr["pin"]
         })
 
-    # ======================================
     # PRIORITY
-    # ======================================
     data["priority_no"] = find(r'(\d{12}\.\w)')
 
     priority_date_match = re.search(
