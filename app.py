@@ -100,10 +100,13 @@ col1, col2, col3 = st.columns([1,2,1])
 
 with col2:
 
+   try:
     st.image(
-        "lotus.png",
+        "logo.png",
         width=220
     )
+except:
+    st.warning("Logo not found")
 
     st.markdown("""
     <div class="title">Nelumbo</div>
@@ -115,7 +118,10 @@ with col2:
 # ==========================================
 # SIDEBAR
 # ==========================================
-st.sidebar.image("logo.png", width=100)
+try:
+    st.sidebar.image("logo.png", width=100)
+except:
+    st.sidebar.warning("Logo not found")
 
 st.sidebar.title("Nelumbo Dashboard")
 
