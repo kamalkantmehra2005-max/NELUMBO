@@ -88,15 +88,28 @@ h1,h2,h3,h4,h5,h6,p,label,div {
 
 </style>
 """, unsafe_allow_html=True)
+img {
+    margin-bottom: 10px;
+}
 
 # ==========================================
 # HEADER
 # ==========================================
-st.markdown("""
-<div class="logo">🌸</div>
-<div class="title">Nelumbo</div>
-<div class="subtitle">Patent AutoFill System</div>
-""", unsafe_allow_html=True)
+col1, col2, col3 = st.columns([1,2,1])
+
+with col2:
+
+    st.image(
+        "logo.png",
+        width=180
+    )
+
+    st.markdown("""
+    <div class="title">Nelumbo</div>
+    <div class="subtitle">
+        Patent AutoFill System
+    </div>
+    """, unsafe_allow_html=True)
 
 # ==========================================
 # SIDEBAR
