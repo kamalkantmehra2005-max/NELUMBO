@@ -190,7 +190,7 @@ def extract_data(pdf_file):
         applicant_name = applicant_match.group(1).strip()
 
         applicant_name = re.sub(
-            r'\([A-Z]{2}/[A-Z]{2}\)',
+            r'\s*\[[A-Z]{2}/[A-Z]{2}\]\s*$',
             '',
             applicant_name
         ).strip()
@@ -218,6 +218,8 @@ def extract_data(pdf_file):
     data["state"] = app_addr["state"]
 
     data["country"] = app_addr["country"]
+    
+    data["Applicant_country"] = app_addr["country"]
 
     data["pin"] = app_addr["pin"]
 
@@ -238,13 +240,14 @@ def extract_data(pdf_file):
     # =====================================================
 
     title_match = re.search(
-        r'Title.*?:\s*(.*?)(?:Publication|PCT|Priority)',
-        text
+    r'\(54\)\s*Title\s*\(EN\)\s*:\s*(.*?)\s*(?=\(54\)\s*Title|\(81\)\s*Designated States)',
+    text,
+    re.IGNORECASE | re.DOTALL
     )
 
     data["title"] = (
-        title_match.group(1).strip()
-        if title_match else ""
+    title_match.group(1).strip()
+    if title_match else ""
     )
 
     # =====================================================
@@ -266,13 +269,14 @@ def extract_data(pdf_file):
     # =====================================================
 
     pub_match = re.search(
-        r'Publication date:\s*(\d{2}\.\d{2}\.\d{4})',
-        text
+    r'Publication date\s*:\s*(\d{2}\.\d{2}\.\d{4})',
+    text,
+    re.IGNORECASE
     )
-
+    
     data["publication_date"] = (
-        pub_match.group(1)
-        if pub_match else ""
+    pub_match.group(1).strip()
+    if pub_match else ""
     )
 
     # =====================================================
@@ -374,6 +378,8 @@ def extract_data(pdf_file):
 
         data[f"inventor_{idx}_name"] = inventor_data["name"]
 
+        data[f"inventor{idx}"] = clean_name
+
         data[f"inventor_{idx}_house"] = inventor_data["house"]
 
         data[f"inventor_{idx}_street"] = inventor_data["street"]
@@ -383,6 +389,8 @@ def extract_data(pdf_file):
         data[f"inventor_{idx}_state"] = inventor_data["state"]
 
         data[f"inventor_{idx}_country"] = inventor_data["country"]
+
+        data["inventor_country"] = inventor_data["country"]
 
         data[f"inventor_{idx}_pin"] = inventor_data["pin"]
 
