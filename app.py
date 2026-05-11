@@ -401,9 +401,11 @@ def smart_replace(text, data):
 
 def generate_doc(template_file, data):
 
-    def generate_doc(template_file, data):
-
     doc = Document(template_file)
+
+    # =====================================================
+    # TAG REPLACEMENT
+    # =====================================================
 
     for para in doc.paragraphs:
 
@@ -411,6 +413,10 @@ def generate_doc(template_file, data):
             para,
             data
         )
+
+    # =====================================================
+    # TABLE TAG REPLACEMENT
+    # =====================================================
 
     for table in doc.tables:
 
@@ -425,13 +431,15 @@ def generate_doc(template_file, data):
                         data
                     )
 
+    # =====================================================
+    # AUTO INVENTOR TABLE
+    # =====================================================
+
     for table in doc.tables:
 
         header_row_index = None
 
-        for idx, row in enumerate(
-            table.rows
-        ):
+        for idx, row in enumerate(table.rows):
 
             row_text = " ".join([
 
@@ -449,6 +457,7 @@ def generate_doc(template_file, data):
 
         if header_row_index is not None:
 
+            # REMOVE OLD ROWS
             while len(table.rows) > (
                 header_row_index + 1
             ):
@@ -459,36 +468,30 @@ def generate_doc(template_file, data):
                     table.rows[-1]._tr
                 )
 
+            # ADD INVENTORS
             for inventor in data["inventors"]:
 
+                # MAIN ROW
                 row_cells = table.add_row().cells
 
-                row_cells[0].text = (
-                    inventor["name"]
-                )
+                row_cells[0].text = inventor["name"]
 
-                row_cells[1].text = (
-                    "Unknown"
-                )
+                row_cells[1].text = "Unknown"
 
-                row_cells[2].text = (
-                    inventor["country"]
-                )
+                row_cells[2].text = inventor["country"]
 
+                # ADDRESS HEADER
                 title_row = table.add_row().cells
 
                 title_row[0].text = (
                     "Address of the Inventor"
                 )
 
-                title_row[0].merge(
-                    title_row[1]
-                )
+                title_row[0].merge(title_row[1])
 
-                title_row[0].merge(
-                    title_row[2]
-                )
+                title_row[0].merge(title_row[2])
 
+                # ADDRESS ROWS
                 labels = [
 
                     "House",
@@ -525,6 +528,10 @@ def generate_doc(template_file, data):
 
             break
 
+    # =====================================================
+    # SAVE FILE
+    # =====================================================
+
     output = BytesIO()
 
     doc.save(output)
@@ -532,7 +539,6 @@ def generate_doc(template_file, data):
     output.seek(0)
 
     return output
-
 # =========================================================
 # FILE UPLOADS
 # =========================================================
