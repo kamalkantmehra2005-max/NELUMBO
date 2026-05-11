@@ -736,6 +736,132 @@ def generate_doc(template_file, data):
 
     return output
 
+    # =====================================================
+    # TABLES
+    # =====================================================
+
+    for table in doc.tables:
+
+        for row in table.rows:
+
+            for cell in row.cells:
+
+                for para in cell.paragraphs:
+
+                    replace_in_runs(
+                        para,
+                        data
+                    )
+
+    # =====================================================
+    # AUTO INVENTOR ROW CLONE
+    # =====================================================
+
+    for table in doc.tables:
+
+        header_found = False
+
+        for row in table.rows:
+
+            row_text = " ".join([
+                cell.text.lower()
+                for cell in row.cells
+            ])
+
+            if "name in full" in row_text:
+
+                header_found = True
+                break
+
+        if header_found:
+
+            # KEEP HEADER ONLY
+            while len(table.rows) > 1:
+
+                tbl = table._tbl
+
+                tbl.remove(
+                    table.rows[-1]._tr
+                )
+
+            # ADD INVENTORS
+            for inventor in data["inventors"]:
+
+                # MAIN ROW
+                row_cells = table.add_row().cells
+
+                row_cells[0].text = inventor["name"]
+
+                row_cells[1].text = "Unknown"
+
+                row_cells[2].text = inventor["country"]
+
+                # ADDRESS TITLE
+                title_row = table.add_row().cells
+
+                title_row[0].text = (
+                    "Address of the Inventor"
+                )
+
+                title_row[0].merge(title_row[1])
+                title_row[0].merge(title_row[2])
+
+                # ADDRESS TABLE
+                address_row = table.add_row().cells
+
+                nested = address_row[0].add_table(
+                    rows=6,
+                    cols=2
+                )
+
+                nested.style = "Table Grid"
+
+                labels = [
+
+                    "House",
+                    "Street",
+                    "City",
+                    "State",
+                    "Country",
+                    "Pin Code"
+
+                ]
+
+                values = [
+
+                    inventor["house"],
+                    inventor["street"],
+                    inventor["city"],
+                    inventor["state"],
+                    inventor["country"],
+                    inventor["pin"]
+
+                ]
+
+                for i in range(6):
+
+                    nested.cell(i, 0).text = labels[i]
+
+                    nested.cell(i, 1).text = values[i]
+
+                address_row[0].merge(
+                    address_row[1]
+                )
+
+                address_row[0].merge(
+                    address_row[2]
+                )
+
+            break
+
+    output = BytesIO()
+
+    doc.save(output)
+
+    output.seek(0)
+
+    return output
+
 # =========================================================
 # FOOTER
 # =========================================================
