@@ -233,12 +233,12 @@ def extract_data(pdf_file):
 
     data["app_pin"] = app_addr["pin"]
 
-    # =====================================================
+       # =====================================================
     # TITLE
     # =====================================================
 
     title_match = re.search(
-        r'Title.*?:\s*(.*?)(?:Publication|PCT|Priority)',
+        r'Title.*?:\s*(.*?)\s{2,}',
         text
     )
 
@@ -246,7 +246,7 @@ def extract_data(pdf_file):
         title_match.group(1).strip()
         if title_match else ""
     )
-
+    
     # =====================================================
     # APPLICATION NUMBER
     # =====================================================
