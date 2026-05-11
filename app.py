@@ -303,7 +303,7 @@ def extract_data(pdf_file):
         if priority_match else ""
     )
 
-    data["priority_country"] = "China"
+    data["priority_country"] = "People's Republic of China"
 
     data["priority_date"] = datetime.today().strftime(
         "%d.%m.%Y"
