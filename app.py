@@ -83,28 +83,65 @@ Patent Automation Tool
 
 
 # =========================================================
+# COUNTRY CODE MAP
+# =========================================================
+
+COUNTRY_CODES = {
+
+    "CN": "People's Republic of China",
+    "JP": "Japan",
+    "KR": "Republic of Korea",
+    "US": "USA",
+    "IN": "India",
+    "EP": "European Patent Office",
+    "DE": "Germany"
+
+}
+
+
+# =========================================================
 # ADDRESS SPLITTER
 # =========================================================
 
 def split_address(addr):
 
+    addr = re.sub(r'\([A-Z]{2}\)', '', addr)
+
     parts = [p.strip() for p in addr.split(",")]
+
+    house = parts[0] if len(parts) > 0 else ""
+
+    street = parts[1] if len(parts) > 1 else ""
+
+    city = parts[2] if len(parts) > 2 else ""
+
+    state = parts[3] if len(parts) > 3 else ""
+
+    country = parts[4] if len(parts) > 4 else ""
+
+    pin = ""
+
+    pin_match = re.search(r'(\d{6})', addr)
+
+    if pin_match:
+
+        pin = pin_match.group(1)
+
+        state = state.replace(pin, "").strip()
+
+    country = COUNTRY_CODES.get(
+        country.upper(),
+        country
+    )
 
     return {
 
-        "house": parts[0] if len(parts) > 0 else "",
-
-        "street": parts[1] if len(parts) > 1 else "",
-
-        "city": parts[2] if len(parts) > 2 else "",
-
-        "state": parts[3] if len(parts) > 3 else "",
-
-        "country": parts[4] if len(parts) > 4 else "",
-
-        "pin": re.search(r'(\d{6})', addr).group(1)
-        if re.search(r'(\d{6})', addr)
-        else ""
+        "house": house,
+        "street": street,
+        "city": city,
+        "state": state,
+        "country": country,
+        "pin": pin
 
     }
 
@@ -152,30 +189,48 @@ def extract_data(pdf_file):
 
         applicant_name = applicant_match.group(1).strip()
 
+        applicant_name = re.sub(
+            r'\([A-Z]{2}/[A-Z]{2}\)',
+            '',
+            applicant_name
+        ).strip()
+
         applicant_address = applicant_match.group(2).strip()
 
     else:
 
         applicant_name = ""
+
         applicant_address = ""
 
     data["applicant"] = applicant_name
+
     data["applicant_name"] = applicant_name
 
     app_addr = split_address(applicant_address)
 
     data["house"] = app_addr["house"]
+
     data["street"] = app_addr["street"]
+
     data["city"] = app_addr["city"]
+
     data["state"] = app_addr["state"]
+
     data["country"] = app_addr["country"]
+
     data["pin"] = app_addr["pin"]
 
     data["app_house_no"] = app_addr["house"]
+
     data["app_street"] = app_addr["street"]
+
     data["app_city"] = app_addr["city"]
+
     data["app_state"] = app_addr["state"]
+
     data["app_country"] = app_addr["country"]
+
     data["app_pin"] = app_addr["pin"]
 
     # =====================================================
@@ -183,7 +238,7 @@ def extract_data(pdf_file):
     # =====================================================
 
     title_match = re.search(
-        r'Title.*?:\s*(.*?)\s{2,}',
+        r'Title.*?:\s*(.*?)(?:Publication|PCT|Priority)',
         text
     )
 
@@ -211,13 +266,27 @@ def extract_data(pdf_file):
     # =====================================================
 
     pub_match = re.search(
-        r'Publication date:\s*(.*?)\(',
+        r'Publication date:\s*(\d{2}\.\d{2}\.\d{4})',
         text
     )
 
     data["publication_date"] = (
-        pub_match.group(1).strip()
+        pub_match.group(1)
         if pub_match else ""
+    )
+
+    # =====================================================
+    # FILING DATE
+    # =====================================================
+
+    filing_match = re.search(
+        r'International filing date:\s*(\d{2}\.\d{2}\.\d{4})',
+        text
+    )
+
+    data["filing_date"] = (
+        filing_match.group(1)
+        if filing_match else ""
     )
 
     # =====================================================
@@ -234,10 +303,10 @@ def extract_data(pdf_file):
         if priority_match else ""
     )
 
-    data["priority_country"] = "CN"
+    data["priority_country"] = "China"
 
     data["priority_date"] = datetime.today().strftime(
-        "%d %B %Y"
+        "%d.%m.%Y"
     )
 
     # =====================================================
@@ -271,6 +340,12 @@ def extract_data(pdf_file):
 
         clean_name = name.strip()
 
+        clean_name = re.sub(
+            r'\([A-Z]{2}/[A-Z]{2}\)',
+            '',
+            clean_name
+        ).strip()
+
         inventor_names.append(clean_name)
 
         split_addr = split_address(address)
@@ -280,10 +355,15 @@ def extract_data(pdf_file):
             "name": clean_name,
 
             "house": split_addr["house"],
+
             "street": split_addr["street"],
+
             "city": split_addr["city"],
+
             "state": split_addr["state"],
+
             "country": split_addr["country"],
+
             "pin": split_addr["pin"]
 
         }
@@ -337,35 +417,41 @@ def extract_data(pdf_file):
 # SMART TAG REPLACER
 # =========================================================
 
-def smart_replace(text, data):
+def replace_in_runs(paragraph, data):
 
-    tags = re.findall(
-        r'{{(.*?)}}',
-        text
-    )
+    for run in paragraph.runs:
 
-    for tag in tags:
+        original_text = run.text
 
-        normalized_template_tag = normalize_tag(tag)
-
-        replacement = ""
-
-        for key, value in data.items():
-
-            normalized_data_key = normalize_tag(key)
-
-            if normalized_template_tag == normalized_data_key:
-
-                replacement = str(value)
-
-                break
-
-        text = text.replace(
-            "{{" + tag + "}}",
-            replacement
+        tags = re.findall(
+            r'{{(.*?)}}',
+            original_text
         )
 
-    return text
+        updated_text = original_text
+
+        for tag in tags:
+
+            normalized_template_tag = normalize_tag(tag)
+
+            replacement = ""
+
+            for key, value in data.items():
+
+                normalized_data_key = normalize_tag(key)
+
+                if normalized_template_tag == normalized_data_key:
+
+                    replacement = str(value)
+
+                    break
+
+            updated_text = updated_text.replace(
+                "{{" + tag + "}}",
+                replacement
+            )
+
+        run.text = updated_text
 
 
 # =========================================================
@@ -382,8 +468,8 @@ def generate_doc(template_file, data):
 
     for para in doc.paragraphs:
 
-        para.text = smart_replace(
-            para.text,
+        replace_in_runs(
+            para,
             data
         )
 
@@ -399,8 +485,8 @@ def generate_doc(template_file, data):
 
                 for para in cell.paragraphs:
 
-                    para.text = smart_replace(
-                        para.text,
+                    replace_in_runs(
+                        para,
                         data
                     )
 
