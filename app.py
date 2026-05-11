@@ -137,77 +137,64 @@ def extract_data(pdf_file):
             for page in pdf.pages
         ])
 
-    text = re.sub(
-        r'\s+',
-        ' ',
-        text
-    )
+    text = re.sub(r'\s+', ' ', text)
+
+    # =====================================================
+    # APPLICANT
+    # =====================================================
 
     applicant_match = re.search(
         r'Applicant\(s\):(.*?);(.*?)(?:\([A-Z]{2}\))',
         text
     )
 
-    applicant_name = ""
-    applicant_address = ""
-
     if applicant_match:
 
         applicant_name = applicant_match.group(1).strip()
 
-        applicant_name = re.sub(
-            r'[\[\(]?[A-Z]{2}/[A-Z]{2}[\]\)]?',
-            '',
-            applicant_name
-        ).strip()
-
         applicant_address = applicant_match.group(2).strip()
 
-    data["applicant"] = applicant_name
+    else:
 
+        applicant_name = ""
+        applicant_address = ""
+
+    data["applicant"] = applicant_name
     data["applicant_name"] = applicant_name
 
-    app_addr = split_address(
-        applicant_address
-    )
+    app_addr = split_address(applicant_address)
 
     data["house"] = app_addr["house"]
-
     data["street"] = app_addr["street"]
-
     data["city"] = app_addr["city"]
-
     data["state"] = app_addr["state"]
-
     data["country"] = app_addr["country"]
-
     data["pin"] = app_addr["pin"]
 
     data["app_house_no"] = app_addr["house"]
-
     data["app_street"] = app_addr["street"]
-
     data["app_city"] = app_addr["city"]
-
     data["app_state"] = app_addr["state"]
-
     data["app_country"] = app_addr["country"]
-
     data["app_pin"] = app_addr["pin"]
 
+    # =====================================================
+    # TITLE
+    # =====================================================
+
     title_match = re.search(
-        r'Title(?: of invention)?\s*:\s*(.*?)\s*(?:Abstract|Publication|PCT|Priority)',
-        text,
-        re.IGNORECASE
+        r'Title.*?:\s*(.*?)\s{2,}',
+        text
     )
 
     data["title"] = (
-
         title_match.group(1).strip()
-
         if title_match else ""
-
     )
+
+    # =====================================================
+    # APPLICATION NUMBER
+    # =====================================================
 
     pct_match = re.search(
         r'PCT/[A-Z]{2}\d{4}/\d+',
@@ -215,40 +202,27 @@ def extract_data(pdf_file):
     )
 
     data["application_no"] = (
-
         pct_match.group(0)
-
         if pct_match else ""
-
     )
 
+    # =====================================================
+    # PUBLICATION DATE
+    # =====================================================
+
     pub_match = re.search(
-        r'Publication date\s*:\s*(\d{2}\.\d{2}\.\d{4})',
-        text,
-        re.IGNORECASE
+        r'Publication date:\s*(.*?)\(',
+        text
     )
 
     data["publication_date"] = (
-
-        pub_match.group(1)
-
+        pub_match.group(1).strip()
         if pub_match else ""
-
     )
 
-    filing_match = re.search(
-        r'International filing date\s*:\s*(\d{2}\.\d{2}\.\d{4})',
-        text,
-        re.IGNORECASE
-    )
-
-    data["filing_date"] = (
-
-        filing_match.group(1)
-
-        if filing_match else ""
-
-    )
+    # =====================================================
+    # PRIORITY NUMBER
+    # =====================================================
 
     priority_match = re.search(
         r'(\d{12}\.\w)',
@@ -256,37 +230,33 @@ def extract_data(pdf_file):
     )
 
     data["priority_no"] = (
-
         priority_match.group(1)
-
         if priority_match else ""
-
     )
 
-    data["priority_country"] = (
-        "People's Republic of China"
-    )
+    data["priority_country"] = "CN"
 
     data["priority_date"] = datetime.today().strftime(
-        "%d.%m.%Y"
+        "%d %B %Y"
     )
+
+    # =====================================================
+    # INVENTORS
+    # =====================================================
 
     inventor_section = re.search(
         r'\(72\)\s*Inventor\(s\):(.*?)\(74\)\s*Agent\(s\):',
         text,
-        re.DOTALL | re.IGNORECASE
+        re.DOTALL
     )
 
     inventor_text = (
-
         inventor_section.group(1)
-
         if inventor_section else ""
-
     )
 
     inventor_pattern = re.findall(
-        r'([A-Z][A-Z\s,\-]+);(.*?)(?=[A-Z][A-Z\s,\-]+;|$)',
+        r'([A-Z][A-Z\s\-\,]+);(.*?)(?=[A-Z][A-Z\s\-\,]+;|$)',
         inventor_text
     )
 
@@ -301,34 +271,19 @@ def extract_data(pdf_file):
 
         clean_name = name.strip()
 
-        clean_name = re.sub(
-            r'[\[\(]?[A-Z]{2}/[A-Z]{2}[\]\)]?',
-            '',
-            clean_name
-        ).strip()
+        inventor_names.append(clean_name)
 
-        inventor_names.append(
-            clean_name
-        )
-
-        split_addr = split_address(
-            address
-        )
+        split_addr = split_address(address)
 
         inventor_data = {
 
             "name": clean_name,
 
             "house": split_addr["house"],
-
             "street": split_addr["street"],
-
             "city": split_addr["city"],
-
             "state": split_addr["state"],
-
             "country": split_addr["country"],
-
             "pin": split_addr["pin"]
 
         }
@@ -337,9 +292,27 @@ def extract_data(pdf_file):
             inventor_data
         )
 
+        data[f"inventor_{idx}_name"] = inventor_data["name"]
+
+        data[f"inventor_{idx}_house"] = inventor_data["house"]
+
+        data[f"inventor_{idx}_street"] = inventor_data["street"]
+
+        data[f"inventor_{idx}_city"] = inventor_data["city"]
+
+        data[f"inventor_{idx}_state"] = inventor_data["state"]
+
+        data[f"inventor_{idx}_country"] = inventor_data["country"]
+
+        data[f"inventor_{idx}_pin"] = inventor_data["pin"]
+
     data["inventor_names"] = ", ".join(
         inventor_names
     )
+
+    # =====================================================
+    # DATES
+    # =====================================================
 
     today = datetime.today()
 
@@ -364,49 +337,35 @@ def extract_data(pdf_file):
 # SMART TAG REPLACER
 # =========================================================
 
-def replace_in_runs(paragraph, data):
+def smart_replace(text, data):
 
-    for run in paragraph.runs:
+    tags = re.findall(
+        r'{{(.*?)}}',
+        text
+    )
 
-        original_text = run.text
+    for tag in tags:
 
-        tags = re.findall(
-            r'{{(.*?)}}',
-            original_text
+        normalized_template_tag = normalize_tag(tag)
+
+        replacement = ""
+
+        for key, value in data.items():
+
+            normalized_data_key = normalize_tag(key)
+
+            if normalized_template_tag == normalized_data_key:
+
+                replacement = str(value)
+
+                break
+
+        text = text.replace(
+            "{{" + tag + "}}",
+            replacement
         )
 
-        updated_text = original_text
-
-        for tag in tags:
-
-            normalized_template_tag = normalize_tag(
-                tag
-            )
-
-            replacement = ""
-
-            for key, value in data.items():
-
-                normalized_data_key = normalize_tag(
-                    key
-                )
-
-                if (
-                    normalized_template_tag
-                    ==
-                    normalized_data_key
-                ):
-
-                    replacement = str(value)
-
-                    break
-
-            updated_text = updated_text.replace(
-                "{{" + tag + "}}",
-                replacement
-            )
-
-        run.text = updated_text
+    return text
 
 
 # =========================================================
@@ -418,18 +377,18 @@ def generate_doc(template_file, data):
     doc = Document(template_file)
 
     # =====================================================
-    # TAG REPLACEMENT
+    # PARAGRAPHS
     # =====================================================
 
     for para in doc.paragraphs:
 
-        replace_in_runs(
-            para,
+        para.text = smart_replace(
+            para.text,
             data
         )
 
     # =====================================================
-    # TABLE TAG REPLACEMENT
+    # TABLES
     # =====================================================
 
     for table in doc.tables:
@@ -440,111 +399,10 @@ def generate_doc(template_file, data):
 
                 for para in cell.paragraphs:
 
-                    replace_in_runs(
-                        para,
+                    para.text = smart_replace(
+                        para.text,
                         data
                     )
-
-    # =====================================================
-    # AUTO INVENTOR TABLE
-    # =====================================================
-
-    for table in doc.tables:
-
-        header_row_index = None
-
-        for idx, row in enumerate(table.rows):
-
-            row_text = " ".join([
-
-                cell.text.lower()
-
-                for cell in row.cells
-
-            ])
-
-            if "name in full" in row_text:
-
-                header_row_index = idx
-
-                break
-
-        if header_row_index is not None:
-
-            # REMOVE OLD ROWS
-            while len(table.rows) > (
-                header_row_index + 1
-            ):
-
-                tbl = table._tbl
-
-                tbl.remove(
-                    table.rows[-1]._tr
-                )
-
-            # ADD INVENTORS
-            for inventor in data["inventors"]:
-
-                # MAIN ROW
-                row_cells = table.add_row().cells
-
-                row_cells[0].text = inventor["name"]
-
-                row_cells[1].text = "Unknown"
-
-                row_cells[2].text = inventor["country"]
-
-                # ADDRESS HEADER
-                title_row = table.add_row().cells
-
-                title_row[0].text = (
-                    "Address of the Inventor"
-                )
-
-                title_row[0].merge(title_row[1])
-
-                title_row[0].merge(title_row[2])
-
-                # ADDRESS ROWS
-                labels = [
-
-                    "House",
-                    "Street",
-                    "City",
-                    "State",
-                    "Country",
-                    "Pin Code"
-
-                ]
-
-                values = [
-
-                    inventor["house"],
-                    inventor["street"],
-                    inventor["city"],
-                    inventor["state"],
-                    inventor["country"],
-                    inventor["pin"]
-
-                ]
-
-                for i in range(6):
-
-                    addr_row = table.add_row().cells
-
-                    addr_row[0].text = labels[i]
-
-                    addr_row[1].text = values[i]
-
-                    addr_row[1].merge(
-                        addr_row[2]
-                    )
-
-            break
-
-    # =====================================================
-    # SAVE FILE
-    # =====================================================
 
     output = BytesIO()
 
@@ -553,6 +411,8 @@ def generate_doc(template_file, data):
     output.seek(0)
 
     return output
+
+
 # =========================================================
 # FILE UPLOADS
 # =========================================================
