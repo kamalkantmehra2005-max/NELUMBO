@@ -1,14 +1,87 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
+import streamlit as st
 import pdfplumber
 import re
 from docx import Document
+from docx.shared import Inches
 from datetime import datetime
-import os
+from copy import deepcopy
+from io import BytesIO
 
 
-pdf_path = ""
-template_path = ""
+# =========================================================
+# PAGE CONFIG
+# =========================================================
+
+st.set_page_config(
+    page_title="Nelumbo",
+    page_icon="🌸",
+    layout="wide"
+)
+
+
+# =========================================================
+# CUSTOM CSS
+# =========================================================
+
+st.markdown("""
+<style>
+
+.stApp {
+    background-color: #0f1117;
+    color: white;
+}
+
+h1,h2,h3,h4,p,div,label {
+    color:white !important;
+}
+
+.stButton>button {
+    background:#7c4dff;
+    color:white;
+    border:none;
+    border-radius:10px;
+    padding:12px;
+    width:100%;
+    font-size:16px;
+    font-weight:bold;
+}
+
+.stDownloadButton>button {
+    background:#00c853;
+    color:white;
+    border:none;
+    border-radius:10px;
+    padding:12px;
+    width:100%;
+    font-size:16px;
+    font-weight:bold;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# HEADER
+# =========================================================
+
+st.markdown("""
+<div style='text-align:center;'>
+
+<div style='font-size:80px;'>
+🌸
+</div>
+
+<h1>
+Nelumbo
+</h1>
+
+<p>
+Patent Automation Tool
+</p>
+
+</div>
+""", unsafe_allow_html=True)
 
 
 # =========================================================
@@ -20,18 +93,26 @@ def split_address(addr):
     parts = [p.strip() for p in addr.split(",")]
 
     return {
+
         "house": parts[0] if len(parts) > 0 else "",
+
         "street": parts[1] if len(parts) > 1 else "",
+
         "city": parts[2] if len(parts) > 2 else "",
+
         "state": parts[3] if len(parts) > 3 else "",
+
         "country": parts[4] if len(parts) > 4 else "",
+
         "pin": re.search(r'(\d{6})', addr).group(1)
-        if re.search(r'(\d{6})', addr) else ""
+        if re.search(r'(\d{6})', addr)
+        else ""
+
     }
 
 
 # =========================================================
-# PDF DATA EXTRACTION
+# PDF EXTRACTION
 # =========================================================
 
 def extract_data(pdf_file):
@@ -40,9 +121,10 @@ def extract_data(pdf_file):
 
     with pdfplumber.open(pdf_file) as pdf:
 
-        text = " ".join(
-            [page.extract_text() or "" for page in pdf.pages]
-        )
+        text = " ".join([
+            page.extract_text() or ""
+            for page in pdf.pages
+        ])
 
     text = re.sub(r'\s+', ' ', text)
 
@@ -58,6 +140,7 @@ def extract_data(pdf_file):
     if applicant_match:
 
         applicant_name = applicant_match.group(1).strip()
+
         applicant_address = applicant_match.group(2).strip()
 
     else:
@@ -92,7 +175,7 @@ def extract_data(pdf_file):
     )
 
     # =====================================================
-    # PCT APPLICATION
+    # PCT
     # =====================================================
 
     pct_match = re.search(
@@ -187,7 +270,9 @@ def extract_data(pdf_file):
 
         }
 
-        data["inventors"].append(inventor_data)
+        data["inventors"].append(
+            inventor_data
+        )
 
         data[f"inv_name_{idx}"] = inventor_data["name"]
 
@@ -203,7 +288,7 @@ def extract_data(pdf_file):
     )
 
     # =====================================================
-    # TODAY DATE
+    # DATES
     # =====================================================
 
     today = datetime.today()
@@ -277,7 +362,7 @@ def replace_all_tags(doc, data):
 
 
 # =========================================================
-# INVENTOR TABLE CREATION
+# INVENTOR TABLE
 # =========================================================
 
 def add_inventor_block(table, inventor):
@@ -293,7 +378,7 @@ def add_inventor_block(table, inventor):
     row_cells[2].text = inventor["country"]
 
     # ==========================================
-    # ADDRESS TITLE ROW
+    # ADDRESS HEADER
     # ==========================================
 
     title_row = table.add_row().cells
@@ -304,7 +389,7 @@ def add_inventor_block(table, inventor):
     title_row[0].merge(title_row[2])
 
     # ==========================================
-    # ADDRESS TABLE ROW
+    # ADDRESS TABLE
     # ==========================================
 
     address_row = table.add_row().cells
@@ -352,7 +437,7 @@ def generate_doc(template_file, data):
     doc = Document(template_file)
 
     # =====================================================
-    # STANDARD TAG REPLACEMENT
+    # REPLACE TAGS
     # =====================================================
 
     replace_all_tags(doc, data)
@@ -378,21 +463,16 @@ def generate_doc(template_file, data):
 
         if found:
 
-            # ==============================================
             # REMOVE OLD SAMPLE ROWS
-            # ==============================================
-
             while len(table.rows) > 2:
 
                 tbl = table._tbl
+
                 tbl.remove(
                     table.rows[-1]._tr
                 )
 
-            # ==============================================
             # ADD INVENTORS
-            # ==============================================
-
             for inventor in data["inventors"]:
 
                 add_inventor_block(
@@ -406,214 +486,84 @@ def generate_doc(template_file, data):
     # SAVE OUTPUT
     # =====================================================
 
-    output_path = os.path.join(
-        os.path.dirname(template_file),
-        "FORM_1_FILLED.docx"
-    )
+    output = BytesIO()
 
-    doc.save(output_path)
+    doc.save(output)
 
-    return output_path
+    output.seek(0)
 
-
-# =========================================================
-# FILE SELECTORS
-# =========================================================
-
-def select_pdf():
-
-    global pdf_path
-
-    pdf_path = filedialog.askopenfilename(
-        filetypes=[("PDF Files", "*.pdf")]
-    )
-
-    if pdf_path:
-
-        pdf_label.config(
-            text=os.path.basename(pdf_path)
-        )
-
-
-def select_template():
-
-    global template_path
-
-    template_path = filedialog.askopenfilename(
-        filetypes=[("Word Files", "*.docx")]
-    )
-
-    if template_path:
-
-        template_label.config(
-            text=os.path.basename(template_path)
-        )
+    return output
 
 
 # =========================================================
-# MAIN GENERATOR
+# FILE UPLOADS
 # =========================================================
 
-def generate():
+st.markdown("## Upload Files")
 
-    if not pdf_path or not template_path:
-
-        messagebox.showerror(
-            "Error",
-            "Please select both files"
-        )
-
-        return
-
-    try:
-
-        data = extract_data(pdf_path)
-
-        output = generate_doc(
-            template_path,
-            data
-        )
-
-        messagebox.showinfo(
-            "Success",
-            f"Document Generated Successfully\n\n{output}"
-        )
-
-    except Exception as e:
-
-        messagebox.showerror(
-            "Error",
-            str(e)
-        )
-
-
-# =========================================================
-# UI
-# =========================================================
-
-root = tk.Tk()
-
-root.title("Nelumbo")
-
-root.geometry("650x550")
-
-root.configure(bg="#0f1117")
-
-
-# =========================================================
-# HEADER
-# =========================================================
-
-title = tk.Label(
-    root,
-    text="🌸 Nelumbo",
-    font=("Arial", 28, "bold"),
-    bg="#0f1117",
-    fg="white"
+pdf_file = st.file_uploader(
+    "Upload PDF Information Sheet",
+    type=["pdf"]
 )
 
-title.pack(pady=20)
-
-subtitle = tk.Label(
-    root,
-    text="Patent Automation Tool",
-    font=("Arial", 12),
-    bg="#0f1117",
-    fg="gray"
+template_file = st.file_uploader(
+    "Upload FORM-1 Template",
+    type=["docx"]
 )
-
-subtitle.pack()
-
-
-# =========================================================
-# PDF BUTTON
-# =========================================================
-
-btn_pdf = tk.Button(
-    root,
-    text="Upload PDF Information Sheet",
-    command=select_pdf,
-    width=35,
-    height=2,
-    bg="#7c4dff",
-    fg="white",
-    font=("Arial", 11, "bold")
-)
-
-btn_pdf.pack(pady=20)
-
-pdf_label = tk.Label(
-    root,
-    text="No PDF Selected",
-    bg="#0f1117",
-    fg="lightgray"
-)
-
-pdf_label.pack()
-
-
-# =========================================================
-# TEMPLATE BUTTON
-# =========================================================
-
-btn_template = tk.Button(
-    root,
-    text="Upload FORM-1 Template",
-    command=select_template,
-    width=35,
-    height=2,
-    bg="#7c4dff",
-    fg="white",
-    font=("Arial", 11, "bold")
-)
-
-btn_template.pack(pady=20)
-
-template_label = tk.Label(
-    root,
-    text="No Template Selected",
-    bg="#0f1117",
-    fg="lightgray"
-)
-
-template_label.pack()
 
 
 # =========================================================
 # GENERATE BUTTON
 # =========================================================
 
-generate_btn = tk.Button(
-    root,
-    text="🚀 Generate Patent Document",
-    command=generate,
-    width=35,
-    height=2,
-    bg="#00c853",
-    fg="white",
-    font=("Arial", 12, "bold")
-)
+if st.button("🚀 Generate Patent Document"):
 
-generate_btn.pack(pady=40)
+    if pdf_file and template_file:
+
+        progress = st.progress(0)
+
+        progress.progress(20)
+
+        data = extract_data(pdf_file)
+
+        progress.progress(60)
+
+        output = generate_doc(
+            template_file,
+            data
+        )
+
+        progress.progress(100)
+
+        st.success(
+            "Document Generated Successfully"
+        )
+
+        st.download_button(
+            label="⬇ Download Filled FORM-1",
+            data=output,
+            file_name="FORM_1_FILLED.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        )
+
+    else:
+
+        st.error(
+            "Please upload both files"
+        )
 
 
 # =========================================================
 # FOOTER
 # =========================================================
 
-footer = tk.Label(
-    root,
-    text="Design by Kamal Kant\nNot recommended for convention and ordinary file",
-    bg="#0f1117",
-    fg="gray",
-    font=("Arial", 9)
-)
+st.markdown("""
+<hr>
 
-footer.pack(side="bottom", pady=20)
+<div style='text-align:center;color:gray;'>
 
+Design by Kamal Kant<br>
+Not recommended for convention and ordinary file
 
-# =========================================================
-# START APP
-# =========================================================
-
-root.mainloop()
+</div>
+""", unsafe_allow_html=True)
