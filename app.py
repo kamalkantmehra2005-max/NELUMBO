@@ -2,9 +2,7 @@ import streamlit as st
 import pdfplumber
 import re
 from docx import Document
-from docx.shared import Inches
 from datetime import datetime
-from copy import deepcopy
 from io import BytesIO
 
 
@@ -112,7 +110,20 @@ def split_address(addr):
 
 
 # =========================================================
-# PDF EXTRACTION
+# NORMALIZE TAGS
+# =========================================================
+
+def normalize_tag(tag):
+
+    return re.sub(
+        r'[^a-z0-9]',
+        '',
+        tag.lower()
+    )
+
+
+# =========================================================
+# EXTRACT PDF DATA
 # =========================================================
 
 def extract_data(pdf_file):
@@ -153,6 +164,13 @@ def extract_data(pdf_file):
 
     app_addr = split_address(applicant_address)
 
+    data["house"] = app_addr["house"]
+    data["street"] = app_addr["street"]
+    data["city"] = app_addr["city"]
+    data["state"] = app_addr["state"]
+    data["country"] = app_addr["country"]
+    data["pin"] = app_addr["pin"]
+
     data["app_house_no"] = app_addr["house"]
     data["app_street"] = app_addr["street"]
     data["app_city"] = app_addr["city"]
@@ -175,7 +193,7 @@ def extract_data(pdf_file):
     )
 
     # =====================================================
-    # PCT
+    # APPLICATION NUMBER
     # =====================================================
 
     pct_match = re.search(
@@ -203,7 +221,7 @@ def extract_data(pdf_file):
     )
 
     # =====================================================
-    # PRIORITY
+    # PRIORITY NUMBER
     # =====================================================
 
     priority_match = re.search(
@@ -223,7 +241,7 @@ def extract_data(pdf_file):
     )
 
     # =====================================================
-    # INVENTOR SECTION
+    # INVENTORS
     # =====================================================
 
     inventor_section = re.search(
@@ -274,14 +292,19 @@ def extract_data(pdf_file):
             inventor_data
         )
 
-        data[f"inv_name_{idx}"] = inventor_data["name"]
+        data[f"inventor_{idx}_name"] = inventor_data["name"]
 
-        data[f"inv_house_{idx}"] = inventor_data["house"]
-        data[f"inv_street_{idx}"] = inventor_data["street"]
-        data[f"inv_city_{idx}"] = inventor_data["city"]
-        data[f"inv_state_{idx}"] = inventor_data["state"]
-        data[f"inv_country_{idx}"] = inventor_data["country"]
-        data[f"inv_pin_{idx}"] = inventor_data["pin"]
+        data[f"inventor_{idx}_house"] = inventor_data["house"]
+
+        data[f"inventor_{idx}_street"] = inventor_data["street"]
+
+        data[f"inventor_{idx}_city"] = inventor_data["city"]
+
+        data[f"inventor_{idx}_state"] = inventor_data["state"]
+
+        data[f"inventor_{idx}_country"] = inventor_data["country"]
+
+        data[f"inventor_{idx}_pin"] = inventor_data["pin"]
 
     data["inventor_names"] = ", ".join(
         inventor_names
@@ -294,7 +317,9 @@ def extract_data(pdf_file):
     today = datetime.today()
 
     day = today.strftime("%d")
+
     month = today.strftime("%B")
+
     year = today.strftime("%Y")
 
     data["today_date_short"] = today.strftime(
@@ -309,123 +334,38 @@ def extract_data(pdf_file):
 
 
 # =========================================================
-# TAG REPLACEMENT
+# SMART TAG REPLACER
 # =========================================================
 
-def replace_text_preserve(paragraph, key, value):
+def smart_replace(text, data):
 
-    if key in paragraph.text:
-
-        for run in paragraph.runs:
-
-            if key in run.text:
-
-                run.text = run.text.replace(
-                    key,
-                    value
-                )
-
-
-def replace_all_tags(doc, data):
-
-    # Paragraphs
-    for para in doc.paragraphs:
-
-        for k, v in data.items():
-
-            if isinstance(v, str):
-
-                replace_text_preserve(
-                    para,
-                    f"{{{{{k}}}}}",
-                    v
-                )
-
-    # Tables
-    for table in doc.tables:
-
-        for row in table.rows:
-
-            for cell in row.cells:
-
-                for para in cell.paragraphs:
-
-                    for k, v in data.items():
-
-                        if isinstance(v, str):
-
-                            replace_text_preserve(
-                                para,
-                                f"{{{{{k}}}}}",
-                                v
-                            )
-
-
-# =========================================================
-# INVENTOR TABLE
-# =========================================================
-
-def add_inventor_block(table, inventor):
-
-    # ==========================================
-    # MAIN INVENTOR ROW
-    # ==========================================
-
-    row_cells = table.add_row().cells
-
-    row_cells[0].text = inventor["name"]
-    row_cells[1].text = "Unknown"
-    row_cells[2].text = inventor["country"]
-
-    # ==========================================
-    # ADDRESS HEADER
-    # ==========================================
-
-    title_row = table.add_row().cells
-
-    title_row[0].text = "Address of the Inventor"
-
-    title_row[0].merge(title_row[1])
-    title_row[0].merge(title_row[2])
-
-    # ==========================================
-    # ADDRESS TABLE
-    # ==========================================
-
-    address_row = table.add_row().cells
-
-    nested = address_row[0].add_table(
-        rows=6,
-        cols=2
+    tags = re.findall(
+        r'{{(.*?)}}',
+        text
     )
 
-    nested.style = "Table Grid"
+    for tag in tags:
 
-    labels = [
-        "House",
-        "Street",
-        "City",
-        "State",
-        "Country",
-        "Pin Code"
-    ]
+        normalized_template_tag = normalize_tag(tag)
 
-    values = [
-        inventor["house"],
-        inventor["street"],
-        inventor["city"],
-        inventor["state"],
-        inventor["country"],
-        inventor["pin"]
-    ]
+        replacement = ""
 
-    for i in range(6):
+        for key, value in data.items():
 
-        nested.cell(i, 0).text = labels[i]
-        nested.cell(i, 1).text = values[i]
+            normalized_data_key = normalize_tag(key)
 
-    address_row[0].merge(address_row[1])
-    address_row[0].merge(address_row[2])
+            if normalized_template_tag == normalized_data_key:
+
+                replacement = str(value)
+
+                break
+
+        text = text.replace(
+            "{{" + tag + "}}",
+            replacement
+        )
+
+    return text
 
 
 # =========================================================
@@ -437,54 +377,32 @@ def generate_doc(template_file, data):
     doc = Document(template_file)
 
     # =====================================================
-    # REPLACE TAGS
+    # PARAGRAPHS
     # =====================================================
 
-    replace_all_tags(doc, data)
+    for para in doc.paragraphs:
+
+        para.text = smart_replace(
+            para.text,
+            data
+        )
 
     # =====================================================
-    # INVENTOR TABLE DETECTION
+    # TABLES
     # =====================================================
 
     for table in doc.tables:
 
-        found = False
-
         for row in table.rows:
 
-            text = " ".join(
-                cell.text for cell in row.cells
-            ).lower()
+            for cell in row.cells:
 
-            if "name in full" in text:
+                for para in cell.paragraphs:
 
-                found = True
-                break
-
-        if found:
-
-            # REMOVE OLD SAMPLE ROWS
-            while len(table.rows) > 2:
-
-                tbl = table._tbl
-
-                tbl.remove(
-                    table.rows[-1]._tr
-                )
-
-            # ADD INVENTORS
-            for inventor in data["inventors"]:
-
-                add_inventor_block(
-                    table,
-                    inventor
-                )
-
-            break
-
-    # =====================================================
-    # SAVE OUTPUT
-    # =====================================================
+                    para.text = smart_replace(
+                        para.text,
+                        data
+                    )
 
     output = BytesIO()
 
@@ -513,7 +431,7 @@ template_file = st.file_uploader(
 
 
 # =========================================================
-# GENERATE BUTTON
+# GENERATE
 # =========================================================
 
 if st.button("🚀 Generate Patent Document"):
