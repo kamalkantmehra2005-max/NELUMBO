@@ -1,447 +1,262 @@
-import streamlit as st
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import pdfplumber
 import re
 from docx import Document
-from copy import deepcopy
-from io import BytesIO
 from datetime import datetime
+import os
 
-# ==========================================
-# PAGE CONFIG
-# ==========================================
-st.set_page_config(
-    page_title="Nelumbo",
-    page_icon="🌸",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
-# ==========================================
-# DARK UI
-# ==========================================
-st.markdown("""
-<style>
+pdf_path = ""
+template_path = ""
 
-html, body, [class*="css"] {
-    background-color: #0f1117;
-    color: white;
-    font-family: 'Times New Roman';
-}
 
-.stApp {
-    background-color: #0f1117;
-}
-
-h1,h2,h3,h4,h5,h6,p,label,div {
-    color: white !important;
-}
-
-[data-testid="stSidebar"] {
-    background-color: #161a24;
-}
-
-[data-testid="stFileUploader"] {
-    border: 2px dashed #7c4dff;
-    border-radius: 15px;
-    padding: 20px;
-    background-color: #1a1d29;
-}
-
-.stButton>button {
-    background-color: #7c4dff;
-    color: white;
-    border-radius: 12px;
-    border: none;
-    padding: 14px 20px;
-    font-size: 18px;
-    font-weight: bold;
-    width: 100%;
-}
-
-.stButton>button:hover {
-    background-color: #9575ff;
-}
-
-.footer {
-    text-align:center;
-    font-size:13px;
-    color:gray;
-    padding-top:30px;
-    padding-bottom:10px;
-}
-
-.title {
-    text-align:center;
-    font-size:42px;
-    font-weight:bold;
-    margin-bottom:0;
-    color:white;
-}
-
-.subtitle {
-    text-align:center;
-    color:gray;
-    margin-top:0;
-    margin-bottom:30px;
-    font-size:18px;
-}
-
-img {
-    margin-bottom: 10px;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# ==========================================
-# HEADER WITH SAFE LOGO
-# ==========================================
-col1, col2, col3 = st.columns([1,2,1])
-
-with col2:
-
-    try:
-        st.image("logo.png", width=220)
-
-    except:
-        st.warning("Logo not found")
-
-    st.markdown("""
-    <div class="title">Nelumbo</div>
-    <div class="subtitle">
-        Patent AutoFill System
-    </div>
-    """, unsafe_allow_html=True)
-
-# ==========================================
-# SIDEBAR
-# ==========================================
-try:
-    st.sidebar.image("logo.png", width=100)
-
-except:
-    st.sidebar.warning("Logo not found")
-
-st.sidebar.title("Nelumbo Dashboard")
-
-form_type = st.sidebar.selectbox(
-    "Select Form Type",
-    [
-        "FORM-1",
-        "FORM-2",
-        "FORM-3",
-        "FORM-5",
-        "CUSTOM TEMPLATE"
-    ]
-)
-
-st.sidebar.info("Upload IASR / PCT PDF and Word Template")
-
-# ==========================================
-# COUNTRY MAP
-# ==========================================
-COUNTRY_MAP = {
-    "CN": "China",
-    "IN": "India",
-    "US": "United States",
-    "JP": "Japan",
-    "KR": "South Korea",
-    "EP": "European Patent Office",
-    "GB": "United Kingdom"
-}
-
-# ==========================================
+# =========================================================
 # ADDRESS SPLITTER
-# ==========================================
+# =========================================================
+
 def split_address(addr):
 
-    result = {
-        "house_no": "",
-        "street": "",
-        "city": "",
-        "state": "",
-        "country": "",
-        "pin": ""
-    }
-
-    # COUNTRY
-    country_match = re.search(r'\(([A-Z]{2})\)', addr)
-
-    country_code = ""
-
-    if country_match:
-        country_code = country_match.group(1)
-
-    result["country"] = COUNTRY_MAP.get(country_code, country_code)
-
-    # REMOVE COUNTRY CODE
-    addr = re.sub(r'\([A-Z]{2}\)', '', addr).strip()
-
-    # PIN CODE
-    pin_match = re.search(r'([A-Za-z0-9 ]+)$', addr)
-
-    if pin_match:
-
-        pin = pin_match.group(1).strip()
-
-        if len(pin) <= 12:
-
-            result["pin"] = pin
-
-            addr = addr[:addr.rfind(pin)].strip()
-
-    # SPLIT BY COMMA
     parts = [p.strip() for p in addr.split(",")]
 
-    parts = [p for p in parts if p]
+    return {
+        "house": parts[0] if len(parts) > 0 else "",
+        "street": parts[1] if len(parts) > 1 else "",
+        "city": parts[2] if len(parts) > 2 else "",
+        "state": parts[3] if len(parts) > 3 else "",
+        "country": parts[4] if len(parts) > 4 else "",
+        "pin": re.search(r'(\d{6})', addr).group(1)
+        if re.search(r'(\d{6})', addr) else ""
+    }
 
-    # HOUSE NO
-    if len(parts) > 0:
 
-        first = parts[0]
+# =========================================================
+# PDF DATA EXTRACTION
+# =========================================================
 
-        if re.search(r'\d', first):
-
-            result["house_no"] = first + ","
-
-            parts = parts[1:]
-
-    # STREET
-    if len(parts) > 0:
-        result["street"] = parts[0] + ","
-
-    # CITY
-    if len(parts) > 1:
-        result["city"] = parts[1] + ","
-
-    # STATE
-    if len(parts) > 2:
-        result["state"] = ", ".join(parts[2:]).strip()
-
-    return result
-
-# ==========================================
-# STYLE PRESERVE REPLACER
-# ==========================================
-def replace_text_preserve_style(paragraph, key, value):
-
-    if key not in paragraph.text:
-        return
-
-    full_text = "".join(run.text for run in paragraph.runs)
-
-    if key not in full_text:
-        return
-
-    replaced_text = full_text.replace(key, value)
-
-    first_run = paragraph.runs[0]
-
-    first_run.text = replaced_text
-
-    for run in paragraph.runs[1:]:
-        run.text = ""
-
-# ==========================================
-# PDF DATA EXTRACTOR
-# ==========================================
 def extract_data(pdf_file):
 
     data = {}
 
     with pdfplumber.open(pdf_file) as pdf:
-        text = " ".join([p.extract_text() or "" for p in pdf.pages])
+
+        text = " ".join(
+            [page.extract_text() or "" for page in pdf.pages]
+        )
 
     text = re.sub(r'\s+', ' ', text)
 
-    def find(pattern):
+    # =====================================================
+    # APPLICANT
+    # =====================================================
 
-        m = re.search(pattern, text, re.DOTALL)
+    applicant_match = re.search(
+        r'Applicant\(s\):(.*?);(.*?)(?:\([A-Z]{2}\))',
+        text
+    )
 
-        return m.group(1).strip() if m else ""
+    if applicant_match:
 
+        applicant_name = applicant_match.group(1).strip()
+        applicant_address = applicant_match.group(2).strip()
+
+    else:
+
+        applicant_name = ""
+        applicant_address = ""
+
+    data["applicant"] = applicant_name
+    data["applicant_name"] = applicant_name
+
+    app_addr = split_address(applicant_address)
+
+    data["app_house_no"] = app_addr["house"]
+    data["app_street"] = app_addr["street"]
+    data["app_city"] = app_addr["city"]
+    data["app_state"] = app_addr["state"]
+    data["app_country"] = app_addr["country"]
+    data["app_pin"] = app_addr["pin"]
+
+    # =====================================================
+    # TITLE
+    # =====================================================
+
+    title_match = re.search(
+        r'Title.*?:\s*(.*?)\s{2,}',
+        text
+    )
+
+    data["title"] = (
+        title_match.group(1).strip()
+        if title_match else ""
+    )
+
+    # =====================================================
+    # PCT APPLICATION
+    # =====================================================
+
+    pct_match = re.search(
+        r'PCT/[A-Z]{2}\d{4}/\d+',
+        text
+    )
+
+    data["application_no"] = (
+        pct_match.group(0)
+        if pct_match else ""
+    )
+
+    # =====================================================
+    # PUBLICATION DATE
+    # =====================================================
+
+    pub_match = re.search(
+        r'Publication date:\s*(.*?)\(',
+        text
+    )
+
+    data["publication_date"] = (
+        pub_match.group(1).strip()
+        if pub_match else ""
+    )
+
+    # =====================================================
+    # PRIORITY
+    # =====================================================
+
+    priority_match = re.search(
+        r'(\d{12}\.\w)',
+        text
+    )
+
+    data["priority_no"] = (
+        priority_match.group(1)
+        if priority_match else ""
+    )
+
+    data["priority_country"] = "CN"
+
+    data["priority_date"] = datetime.today().strftime(
+        "%d %B %Y"
+    )
+
+    # =====================================================
+    # INVENTOR SECTION
+    # =====================================================
+
+    inventor_section = re.search(
+        r'\(72\)\s*Inventor\(s\):(.*?)\(74\)\s*Agent\(s\):',
+        text,
+        re.DOTALL
+    )
+
+    inventor_text = (
+        inventor_section.group(1)
+        if inventor_section else ""
+    )
+
+    inventor_pattern = re.findall(
+        r'([A-Z][A-Z\s\-\,]+);(.*?)(?=[A-Z][A-Z\s\-\,]+;|$)',
+        inventor_text
+    )
+
+    data["inventors"] = []
+
+    inventor_names = []
+
+    for idx, (name, address) in enumerate(
+        inventor_pattern,
+        start=1
+    ):
+
+        clean_name = name.strip()
+
+        inventor_names.append(clean_name)
+
+        split_addr = split_address(address)
+
+        inventor_data = {
+
+            "name": clean_name,
+
+            "house": split_addr["house"],
+            "street": split_addr["street"],
+            "city": split_addr["city"],
+            "state": split_addr["state"],
+            "country": split_addr["country"],
+            "pin": split_addr["pin"]
+
+        }
+
+        data["inventors"].append(inventor_data)
+
+        data[f"inv_name_{idx}"] = inventor_data["name"]
+
+        data[f"inv_house_{idx}"] = inventor_data["house"]
+        data[f"inv_street_{idx}"] = inventor_data["street"]
+        data[f"inv_city_{idx}"] = inventor_data["city"]
+        data[f"inv_state_{idx}"] = inventor_data["state"]
+        data[f"inv_country_{idx}"] = inventor_data["country"]
+        data[f"inv_pin_{idx}"] = inventor_data["pin"]
+
+    data["inventor_names"] = ", ".join(
+        inventor_names
+    )
+
+    # =====================================================
     # TODAY DATE
+    # =====================================================
+
     today = datetime.today()
 
     day = today.strftime("%d")
     month = today.strftime("%B")
     year = today.strftime("%Y")
 
-    suffix = "th"
-
-    if day.endswith("1") and day != "11":
-        suffix = "st"
-
-    elif day.endswith("2") and day != "12":
-        suffix = "nd"
-
-    elif day.endswith("3") and day != "13":
-        suffix = "rd"
-
-    data["today_date_long"] = f"{day}{suffix} day of {month}, {year}"
-
-    data["today_date_short"] = today.strftime("%B %d, %Y")
-
-    # BASIC DETAILS
-    data["application_no"] = find(r'Application Number:\s*(PCT/\S+)')
-
-    date_match = re.search(
-        r'Publication date.*?(\d{2}\.\d{2}\.\d{4})',
-        text
+    data["today_date_short"] = today.strftime(
+        "%B %d, %Y"
     )
 
-    data["publication_date"] = date_match.group(1) if date_match else ""
-
-    data["title"] = find(r'Title \(EN\):\s*(.*?)\s\(')
-
-    # ABSTRACT
-    abstract_match = re.search(
-        r'Abstract:\s*\(EN\):(.*?)(?:\([A-Z]{2}\):|Claims|Description)',
-        text,
-        re.DOTALL
+    data["today_date_long"] = (
+        f"{day}th day of {month}, {year}"
     )
-
-    data["abstract"] = abstract_match.group(1).strip() if abstract_match else ""
-
-    # APPLICANT
-    applicant_match = re.search(
-        r'Applicant\(s\):(.*?)\[',
-        text
-    )
-
-    if applicant_match:
-
-        applicant_full = applicant_match.group(1).strip()
-
-        if ";" in applicant_full:
-
-            name, addr = applicant_full.split(";", 1)
-
-            data["applicant_name"] = name.strip()
-
-            data["applicant_address"] = addr.strip()
-
-            split_addr = split_address(addr)
-
-            data["app_house_no"] = split_addr["house_no"]
-            data["app_street"] = split_addr["street"]
-            data["app_city"] = split_addr["city"]
-            data["app_state"] = split_addr["state"]
-            data["app_country"] = split_addr["country"]
-            data["app_pin"] = split_addr["pin"]
-
-    # INVENTORS
-    inventors = re.findall(
-        r'([A-Z][^;]+);(.*?\([A-Z]{2}\))',
-        text
-    )
-
-    data["inventors"] = []
-
-    for name, addr in inventors:
-
-        name = name.strip()
-
-        addr = addr.strip()
-
-        split_addr = split_address(addr)
-
-        data["inventors"].append({
-            "name": name,
-            "house_no": split_addr["house_no"],
-            "street": split_addr["street"],
-            "city": split_addr["city"],
-            "state": split_addr["state"],
-            "country": split_addr["country"],
-            "pin": split_addr["pin"]
-        })
-
-    # PRIORITY
-    data["priority_no"] = find(r'(\d{12}\.\w)')
-
-    priority_date_match = re.search(
-        r'(\d{2}\.\d{2}\.\d{4})',
-        text
-    )
-
-    data["priority_date"] = priority_date_match.group(1) if priority_date_match else ""
-
-    data["priority_country"] = "China"
 
     return data
 
-# ==========================================
-# INVENTOR TABLE AUTO ROWS
-# ==========================================
-def fill_inventor_table(doc, inventors):
 
-    for table in doc.tables:
+# =========================================================
+# TAG REPLACEMENT
+# =========================================================
 
-        rows = table.rows
+def replace_text_preserve(paragraph, key, value):
 
-        for i, row in enumerate(rows):
+    if key in paragraph.text:
 
-            row_text = " ".join(cell.text for cell in row.cells)
+        for run in paragraph.runs:
 
-            if "{{inv_name}}" in row_text:
+            if key in run.text:
 
-                template_row = row
+                run.text = run.text.replace(
+                    key,
+                    value
+                )
 
-                for inv in inventors:
 
-                    new_row = deepcopy(template_row)
+def replace_all_tags(doc, data):
 
-                    replacements = {
-                        "{{inv_name}}": inv["name"],
-                        "{{house_no}}": inv["house_no"],
-                        "{{street}}": inv["street"],
-                        "{{city}}": inv["city"],
-                        "{{state}}": inv["state"],
-                        "{{country}}": inv["country"],
-                        "{{pin}}": inv["pin"]
-                    }
-
-                    for cell in new_row.cells:
-
-                        for para in cell.paragraphs:
-
-                            for tag, value in replacements.items():
-
-                                replace_text_preserve_style(
-                                    para,
-                                    tag,
-                                    value
-                                )
-
-                    table._tbl.insert(i, new_row._tr)
-
-                    i += 1
-
-                table._tbl.remove(template_row._tr)
-
-                return
-
-# ==========================================
-# DOC GENERATOR
-# ==========================================
-def generate_doc(template_file, data):
-
-    doc = Document(template_file)
-
-    # PARAGRAPH REPLACE
+    # Paragraphs
     for para in doc.paragraphs:
 
         for k, v in data.items():
 
             if isinstance(v, str):
 
-                replace_text_preserve_style(
+                replace_text_preserve(
                     para,
                     f"{{{{{k}}}}}",
                     v
                 )
 
-    # TABLE REPLACE
+    # Tables
     for table in doc.tables:
 
         for row in table.rows:
@@ -454,85 +269,351 @@ def generate_doc(template_file, data):
 
                         if isinstance(v, str):
 
-                            replace_text_preserve_style(
+                            replace_text_preserve(
                                 para,
                                 f"{{{{{k}}}}}",
                                 v
                             )
 
-    # INVENTOR ROWS
-    fill_inventor_table(doc, data["inventors"])
 
-    output_stream = BytesIO()
+# =========================================================
+# INVENTOR TABLE CREATION
+# =========================================================
 
-    doc.save(output_stream)
+def add_inventor_block(table, inventor):
 
-    output_stream.seek(0)
+    # ==========================================
+    # MAIN INVENTOR ROW
+    # ==========================================
 
-    return output_stream
+    row_cells = table.add_row().cells
 
-# ==========================================
-# MAIN UI
-# ==========================================
-st.markdown("## 📂 Upload Files")
+    row_cells[0].text = inventor["name"]
+    row_cells[1].text = "Unknown"
+    row_cells[2].text = inventor["country"]
 
-pdf_file = st.file_uploader(
-    "Drag & Drop IASR / PCT PDF",
-    type=["pdf"]
-)
+    # ==========================================
+    # ADDRESS TITLE ROW
+    # ==========================================
 
-template_file = st.file_uploader(
-    "Drag & Drop Word Template (.docx)",
-    type=["docx"]
-)
+    title_row = table.add_row().cells
 
-# ==========================================
-# GENERATE BUTTON
-# ==========================================
-if st.button("🚀 Generate Patent Document"):
+    title_row[0].text = "Address of the Inventor"
 
-    if pdf_file and template_file:
+    title_row[0].merge(title_row[1])
+    title_row[0].merge(title_row[2])
 
-        progress = st.progress(0)
+    # ==========================================
+    # ADDRESS TABLE ROW
+    # ==========================================
 
-        status = st.empty()
+    address_row = table.add_row().cells
 
-        status.text("Reading PDF...")
-        progress.progress(20)
+    nested = address_row[0].add_table(
+        rows=6,
+        cols=2
+    )
 
-        data = extract_data(pdf_file)
+    nested.style = "Table Grid"
 
-        status.text("Extracting Data...")
-        progress.progress(50)
+    labels = [
+        "House",
+        "Street",
+        "City",
+        "State",
+        "Country",
+        "Pin Code"
+    ]
 
-        output = generate_doc(template_file, data)
+    values = [
+        inventor["house"],
+        inventor["street"],
+        inventor["city"],
+        inventor["state"],
+        inventor["country"],
+        inventor["pin"]
+    ]
 
-        status.text("Generating Word File...")
-        progress.progress(80)
+    for i in range(6):
 
-        status.text("Completed Successfully")
-        progress.progress(100)
+        nested.cell(i, 0).text = labels[i]
+        nested.cell(i, 1).text = values[i]
 
-        st.success("Patent document generated successfully.")
+    address_row[0].merge(address_row[1])
+    address_row[0].merge(address_row[2])
 
-        st.download_button(
-            label="⬇ Download Filled Document",
-            data=output,
-            file_name=f"{form_type}_Filled.docx",
-            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+# =========================================================
+# DOCUMENT GENERATOR
+# =========================================================
+
+def generate_doc(template_file, data):
+
+    doc = Document(template_file)
+
+    # =====================================================
+    # STANDARD TAG REPLACEMENT
+    # =====================================================
+
+    replace_all_tags(doc, data)
+
+    # =====================================================
+    # INVENTOR TABLE DETECTION
+    # =====================================================
+
+    for table in doc.tables:
+
+        found = False
+
+        for row in table.rows:
+
+            text = " ".join(
+                cell.text for cell in row.cells
+            ).lower()
+
+            if "name in full" in text:
+
+                found = True
+                break
+
+        if found:
+
+            # ==============================================
+            # REMOVE OLD SAMPLE ROWS
+            # ==============================================
+
+            while len(table.rows) > 2:
+
+                tbl = table._tbl
+                tbl.remove(
+                    table.rows[-1]._tr
+                )
+
+            # ==============================================
+            # ADD INVENTORS
+            # ==============================================
+
+            for inventor in data["inventors"]:
+
+                add_inventor_block(
+                    table,
+                    inventor
+                )
+
+            break
+
+    # =====================================================
+    # SAVE OUTPUT
+    # =====================================================
+
+    output_path = os.path.join(
+        os.path.dirname(template_file),
+        "FORM_1_FILLED.docx"
+    )
+
+    doc.save(output_path)
+
+    return output_path
+
+
+# =========================================================
+# FILE SELECTORS
+# =========================================================
+
+def select_pdf():
+
+    global pdf_path
+
+    pdf_path = filedialog.askopenfilename(
+        filetypes=[("PDF Files", "*.pdf")]
+    )
+
+    if pdf_path:
+
+        pdf_label.config(
+            text=os.path.basename(pdf_path)
         )
 
-    else:
 
-        st.error("Please upload both PDF and Word Template.")
+def select_template():
 
-# ==========================================
+    global template_path
+
+    template_path = filedialog.askopenfilename(
+        filetypes=[("Word Files", "*.docx")]
+    )
+
+    if template_path:
+
+        template_label.config(
+            text=os.path.basename(template_path)
+        )
+
+
+# =========================================================
+# MAIN GENERATOR
+# =========================================================
+
+def generate():
+
+    if not pdf_path or not template_path:
+
+        messagebox.showerror(
+            "Error",
+            "Please select both files"
+        )
+
+        return
+
+    try:
+
+        data = extract_data(pdf_path)
+
+        output = generate_doc(
+            template_path,
+            data
+        )
+
+        messagebox.showinfo(
+            "Success",
+            f"Document Generated Successfully\n\n{output}"
+        )
+
+    except Exception as e:
+
+        messagebox.showerror(
+            "Error",
+            str(e)
+        )
+
+
+# =========================================================
+# UI
+# =========================================================
+
+root = tk.Tk()
+
+root.title("Nelumbo")
+
+root.geometry("650x550")
+
+root.configure(bg="#0f1117")
+
+
+# =========================================================
+# HEADER
+# =========================================================
+
+title = tk.Label(
+    root,
+    text="🌸 Nelumbo",
+    font=("Arial", 28, "bold"),
+    bg="#0f1117",
+    fg="white"
+)
+
+title.pack(pady=20)
+
+subtitle = tk.Label(
+    root,
+    text="Patent Automation Tool",
+    font=("Arial", 12),
+    bg="#0f1117",
+    fg="gray"
+)
+
+subtitle.pack()
+
+
+# =========================================================
+# PDF BUTTON
+# =========================================================
+
+btn_pdf = tk.Button(
+    root,
+    text="Upload PDF Information Sheet",
+    command=select_pdf,
+    width=35,
+    height=2,
+    bg="#7c4dff",
+    fg="white",
+    font=("Arial", 11, "bold")
+)
+
+btn_pdf.pack(pady=20)
+
+pdf_label = tk.Label(
+    root,
+    text="No PDF Selected",
+    bg="#0f1117",
+    fg="lightgray"
+)
+
+pdf_label.pack()
+
+
+# =========================================================
+# TEMPLATE BUTTON
+# =========================================================
+
+btn_template = tk.Button(
+    root,
+    text="Upload FORM-1 Template",
+    command=select_template,
+    width=35,
+    height=2,
+    bg="#7c4dff",
+    fg="white",
+    font=("Arial", 11, "bold")
+)
+
+btn_template.pack(pady=20)
+
+template_label = tk.Label(
+    root,
+    text="No Template Selected",
+    bg="#0f1117",
+    fg="lightgray"
+)
+
+template_label.pack()
+
+
+# =========================================================
+# GENERATE BUTTON
+# =========================================================
+
+generate_btn = tk.Button(
+    root,
+    text="🚀 Generate Patent Document",
+    command=generate,
+    width=35,
+    height=2,
+    bg="#00c853",
+    fg="white",
+    font=("Arial", 12, "bold")
+)
+
+generate_btn.pack(pady=40)
+
+
+# =========================================================
 # FOOTER
-# ==========================================
-st.markdown("""
-<div class="footer">
-<hr>
-<b>Design by Kamal Kant</b><br>
-<i>Not recommended for convention and ordinary file</i>
-</div>
-""", unsafe_allow_html=True)
+# =========================================================
+
+footer = tk.Label(
+    root,
+    text="Design by Kamal Kant\nNot recommended for convention and ordinary file",
+    bg="#0f1117",
+    fg="gray",
+    font=("Arial", 9)
+)
+
+footer.pack(side="bottom", pady=20)
+
+
+# =========================================================
+# START APP
+# =========================================================
+
+root.mainloop()
