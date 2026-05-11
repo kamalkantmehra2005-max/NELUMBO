@@ -364,35 +364,49 @@ def extract_data(pdf_file):
 # SMART TAG REPLACER
 # =========================================================
 
-def smart_replace(text, data):
+def replace_in_runs(paragraph, data):
 
-    tags = re.findall(
-        r'{{(.*?)}}',
-        text
-    )
+    for run in paragraph.runs:
 
-    for tag in tags:
+        original_text = run.text
 
-        normalized_template_tag = normalize_tag(tag)
-
-        replacement = ""
-
-        for key, value in data.items():
-
-            normalized_data_key = normalize_tag(key)
-
-            if normalized_template_tag == normalized_data_key:
-
-                replacement = str(value)
-
-                break
-
-        text = text.replace(
-            "{{" + tag + "}}",
-            replacement
+        tags = re.findall(
+            r'{{(.*?)}}',
+            original_text
         )
 
-    return text
+        updated_text = original_text
+
+        for tag in tags:
+
+            normalized_template_tag = normalize_tag(
+                tag
+            )
+
+            replacement = ""
+
+            for key, value in data.items():
+
+                normalized_data_key = normalize_tag(
+                    key
+                )
+
+                if (
+                    normalized_template_tag
+                    ==
+                    normalized_data_key
+                ):
+
+                    replacement = str(value)
+
+                    break
+
+            updated_text = updated_text.replace(
+                "{{" + tag + "}}",
+                replacement
+            )
+
+        run.text = updated_text
 
 
 # =========================================================
