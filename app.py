@@ -380,6 +380,8 @@ def extract_data(pdf_file):
 
         data[f"inventor{idx}"] = clean_name
 
+        data[f"inventor{idx}"] = clean_name
+
         data["inventor1"] = "\n".join(
         [inv["name"] for inv in data["inventors"]]
        )
