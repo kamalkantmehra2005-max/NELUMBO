@@ -502,6 +502,82 @@ def generate_doc(template_file, data):
                         data
                     )
 
+    # =====================================================
+    # AUTO INVENTOR TABLE CLONE
+    # =====================================================
+
+    from copy import deepcopy
+
+    for table in doc.tables:
+
+        for row in table.rows:
+
+            row_text = " ".join([
+                cell.text
+                for cell in row.cells
+            ])
+
+            if "{{inventor1}}" in row_text:
+
+                template_row = row._tr
+
+                parent_table = table._tbl
+
+                # REMOVE ORIGINAL TEMPLATE ROW
+                parent_table.remove(template_row)
+
+                for inventor in data["inventors"]:
+
+                    new_row = deepcopy(template_row)
+
+                    parent_table.append(new_row)
+
+                    current_row = table.rows[-1]
+
+                    for cell in current_row.cells:
+
+                        for para in cell.paragraphs:
+
+                            for run in para.runs:
+
+                                text = run.text
+
+                                text = text.replace(
+                                    "{{inventor1}}",
+                                    inventor["name"]
+                                )
+
+                                text = text.replace(
+                                    "{{inventor_country}}",
+                                    inventor["country"]
+                                )
+
+                                text = text.replace(
+                                    "{{house}}",
+                                    inventor["house"]
+                                )
+
+                                text = text.replace(
+                                    "{{street}}",
+                                    inventor["street"]
+                                )
+
+                                text = text.replace(
+                                    "{{city}}",
+                                    inventor["city"]
+                                )
+
+                                text = text.replace(
+                                    "{{state}}",
+                                    inventor["state"]
+                                )
+
+                                text = text.replace(
+                                    "{{pin}}",
+                                    inventor["pin"]
+                                )
+
+                                run.text = text
     output = BytesIO()
 
     doc.save(output)
